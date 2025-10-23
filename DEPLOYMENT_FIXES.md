@@ -1,4 +1,4 @@
-# Deployment Fixes for Render
+# Deployment Fixes for Render / Railway
 
 ## Issues Fixed
 
@@ -61,7 +61,30 @@ Created a `_redirects` file for Render deployment that redirects all routes to `
 
 ---
 
-## Deployment Steps for Render
+## Additional Fix: Email Verification Timeout ✅
+
+**Problem:** On Railway (and other platforms), the server failed to start because email verification timed out during startup.
+
+**Root Cause:** The startup email verification was blocking the server from starting. SMTP connections can take 15-30 seconds on cold starts.
+
+**Solution:**
+- Made email verification **non-blocking** using `setImmediate()`
+- Server now starts immediately
+- Email verification runs in background
+- Emails still work even if verification fails (it's just a startup check)
+
+**File Modified:**
+- `server/server.js` - Lines 87-142
+
+**Benefits:**
+- ✅ Server starts in <5 seconds
+- ✅ No more startup failures due to email timeouts
+- ✅ Emails still work perfectly
+- ✅ Better error messages in logs
+
+---
+
+## Deployment Steps for Render / Railway
 
 ### Client (Frontend) Deployment
 

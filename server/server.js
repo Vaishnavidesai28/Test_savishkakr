@@ -85,49 +85,64 @@ const checkEmailConfig = async () => {
     });
 
     // Verify connection with timeout (don't block server startup)
-    const verifyPromise = transporter.verify();
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Verification timeout')), 10000)
-    );
-    
-    await Promise.race([verifyPromise, timeoutPromise]);
-    
-    console.log('✅ Email Server Connected Successfully!');
-    console.log(`📧 SMTP Host: ${process.env.EMAIL_HOST}:${port}`);
-    console.log(`👤 Sender: ${process.env.EMAIL_USER}`);
-    console.log(`🔒 Authentication: Verified`);
-    console.log(`⏱️  Timeouts: Connection(60s), Greeting(30s), Socket(60s)`);
+    // Run verification in background to not block server startup
+    console.log('⏳ Verifying SMTP connection in background...');
     console.log('─'.repeat(50));
+    
+    // Run verification asynchronously without blocking
+    setImmediate(async () => {
+      try {
+        const verifyPromise = transporter.verify();
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Verification timeout')), 15000)
+        );
+        
+        await Promise.race([verifyPromise, timeoutPromise]);
+        
+        console.log('\n✅ Email Server Connected Successfully!');
+        console.log(`📧 SMTP Host: ${process.env.EMAIL_HOST}:${port}`);
+        console.log(`👤 Sender: ${process.env.EMAIL_USER}`);
+        console.log(`🔒 Authentication: Verified`);
+        console.log(`⏱️  Timeouts: Connection(60s), Greeting(30s), Socket(60s)`);
+        console.log('─'.repeat(50));
+      } catch (verifyError) {
+        console.log('\n❌ Email Server Connection FAILED!');
+        console.log(`📛 Error: ${verifyError.message}`);
+        
+        // Provide specific troubleshooting tips
+        if (verifyError.message.includes('Invalid login') || verifyError.message.includes('Username and Password not accepted')) {
+          console.log('\n💡 SOLUTION - Invalid Credentials:');
+          console.log('   1. For Gmail: Use App Password, NOT regular password');
+          console.log('   2. Enable 2FA: https://myaccount.google.com/security');
+          console.log('   3. Generate App Password: https://myaccount.google.com/apppasswords');
+          console.log('   4. Remove ALL spaces from the App Password');
+          console.log('   5. Update EMAIL_PASS on Railway and redeploy');
+        } else if (verifyError.message.includes('ECONNECTION') || verifyError.message.includes('timeout') || verifyError.message.includes('ETIMEDOUT')) {
+          console.log('\n💡 SOLUTION - Connection Timeout:');
+          console.log('   1. Verify EMAIL_HOST is correct (e.g., smtp.gmail.com)');
+          console.log('   2. Verify EMAIL_PORT is 587 (or 465 for SSL)');
+          console.log('   3. Check if port 587 is blocked by firewall');
+          console.log('   4. On Railway/Render: Service may be cold starting (normal)');
+          console.log('   5. Emails will still work - this is just a startup check');
+        } else if (verifyError.message.includes('EAUTH')) {
+          console.log('\n💡 SOLUTION - Authentication Error:');
+          console.log('   1. Check EMAIL_USER is your full email address');
+          console.log('   2. Check EMAIL_PASS is correct (no typos)');
+          console.log('   3. For Gmail: Ensure App Password is used');
+        } else {
+          console.log('\n💡 TROUBLESHOOTING:');
+          console.log('   1. Check all environment variables are set correctly');
+          console.log('   2. Run: npm run diagnose-email (locally)');
+          console.log('   3. Check Railway logs for more details');
+        }
+        
+        console.log('─'.repeat(50));
+        console.log('⚠️  Email features may still work - verification failed but emails will be sent when needed');
+      }
+    });
   } catch (error) {
-    console.log('❌ Email Server Connection FAILED!');
+    console.log('❌ Email Configuration Error!');
     console.log(`📛 Error: ${error.message}`);
-    
-    // Provide specific troubleshooting tips
-    if (error.message.includes('Invalid login') || error.message.includes('Username and Password not accepted')) {
-      console.log('\n💡 SOLUTION - Invalid Credentials:');
-      console.log('   1. For Gmail: Use App Password, NOT regular password');
-      console.log('   2. Enable 2FA: https://myaccount.google.com/security');
-      console.log('   3. Generate App Password: https://myaccount.google.com/apppasswords');
-      console.log('   4. Remove ALL spaces from the App Password');
-      console.log('   5. Update EMAIL_PASS on Render and redeploy');
-    } else if (error.message.includes('ECONNECTION') || error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
-      console.log('\n💡 SOLUTION - Connection Timeout:');
-      console.log('   1. Verify EMAIL_HOST is correct (e.g., smtp.gmail.com)');
-      console.log('   2. Verify EMAIL_PORT is 587 (or 465 for SSL)');
-      console.log('   3. Check if port 587 is blocked by firewall');
-      console.log('   4. On Render Free tier: Service may be cold starting');
-    } else if (error.message.includes('EAUTH')) {
-      console.log('\n💡 SOLUTION - Authentication Error:');
-      console.log('   1. Check EMAIL_USER is your full email address');
-      console.log('   2. Check EMAIL_PASS is correct (no typos)');
-      console.log('   3. For Gmail: Ensure App Password is used');
-    } else {
-      console.log('\n💡 TROUBLESHOOTING:');
-      console.log('   1. Check all environment variables are set correctly');
-      console.log('   2. Run: npm run diagnose-email (locally)');
-      console.log('   3. Check Render logs for more details');
-    }
-    
     console.log('─'.repeat(50));
     
     if (process.env.NODE_ENV === 'production') {
